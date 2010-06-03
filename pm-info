@@ -1,0 +1,237 @@
+#!/bin/bash
+#
+# pm-info: battery info from APM/ACPI files
+#
+
+msgError() {
+  echo "Error, $@" 2>&1
+  exit 1
+}
+
+msgUsage() {
+  cat << __EOF__
+pm-info 0.1 by Jose V Beneyto <sepen@crux.nu>
+Usage: pm-info [options]
+Where options are:
+  -v           Print verbose info
+  -k           Print kernel driver version
+  -b           Print bios driver version
+  -s           Print battery status
+  -c           Print battery capacity
+  -cf          Print battery capacity full
+  -cw          Print battery capacity warning
+  -cl          Print battery capacity low
+  -mv          Print baterry voltage
+  -mf          Print battery voltage full
+  -p           Print battery charge percentage
+  -t           Print battery charge time
+  -u           Print units for battery charge time
+  -e           Print end of line
+  -C "STRING"  Print output in custom format
+  -h           Print this help information
+Examples of STRING:
+  apm/apci:    "Batt: %s (%p)"
+  apm:         "Battery Status: %p (%t%u), AC: %s"
+  apm:         "BIOS Version %b (Kernel Driver Version %k): %p"
+  acpi:        "Batt: %s %p - Capacity: %c/%cf mAh - Voltage: %mv/%mf mV"
+__EOF__
+  exit 0
+}
+
+getKernelDriverVersion() {
+  echo -n $KERNEL_DRIVER_VERSION
+}
+
+getBiosVersion() {
+  echo -n $BIOS_VERSION
+}
+
+getBattStatus() {
+  echo -n $BATT_STATUS
+}
+
+getBattCapacity() {
+  echo -n $BATT_CAPACITY
+}
+
+getBattCapacityFull() {
+  echo -n $BATT_CAPACITY_FULL
+}
+
+getBattCapacityWarning() {
+  echo -n $BATT_CAPACITY_WARNING
+}
+
+getBattCapacityLow() {
+  echo -n $BATT_CAPACITY_LOW
+}
+
+getBattVoltage() {
+  echo -n $BATT_VOLTAGE
+}
+
+getBattVoltageFull() {
+  echo -n $BATT_VOLTAGE_FULL
+}
+
+getBattPercentage() {
+  echo -n $BATT_PERCENTAGE
+}
+
+getBattTime() {
+  echo -n $BATT_TIME
+}
+
+getBattTimeUnits() {
+  echo -n $BATT_TIME_UNITS
+}
+
+getCustomFormat() {
+  echo $@ | sed \
+    -e "s|%k|$KERNEL_DRIVER_VERSION|g" \
+    -e "s|%b|$BIOS_VERSION|g" \
+    -e "s|%s|$BATT_STATUS|g" \
+    -e "s|%c|$BATT_CAPACITY|g" \
+    -e "s|%cf|$BATT_CAPACITY_FULL|g" \
+    -e "s|%cw|$BATT_CAPACITY_WARNING|g" \
+    -e "s|%cl|$BATT_CACACITY_LOW|g" \
+    -e "s|%mv|$BATT_VOLTAGE|g" \
+    -e "s|%mf|$BATT_VOLTAGE_FULL|g" \
+    -e "s|%p|$BATT_PERCENTAGE|g" \
+    -e "s|%t|$BATT_TIME|g" \
+    -e "s|%u|$BATT_TIME_UNITS|g"
+}
+
+getStatus() {
+  if [ $VERBOSE -eq 1 ]; then
+    [ "$PM_MODE" == "apm" ] && echo "Driver version: $KERNEL_DRIVER_VERSION"
+    [ "$PM_MODE" == "apm" ] && echo "Bios version: $BIOS_VERSION"
+  fi
+  echo "Battery ${BATT_STATUS}: ${BATT_PERCENTAGE}"
+  if [ $VERBOSE -eq 1 ]; then
+    [ "$PM_MODE" == "acpi" ] && echo "Battery capacity: ${BATT_CAPACITY}mAh"
+    [ "$PM_MODE" == "acpi" ] && echo "Battery full: ${BATT_CAPACITY_FULL}mAh"
+    [ "$PM_MODE" == "acpi" ] && echo "Battery warning: ${BATT_CAPACITY_WARNING}mAh"
+    [ "$PM_MODE" == "acpi" ] && echo "Battery low: ${BATT_CAPACITY_LOW}mAh"
+    [ "$PM_MODE" == "acpi" ] && echo "Battery voltage: ${BATT_VOLTAGE}mV"
+    [ "$PM_MODE" == "acpi" ] && echo "Battery voltage full: ${BATT_VOLTAGE_FULL}mV"
+    [ "$PM_MODE" == "apm" ] && echo "Battery remaining: ${BATT_TIME}${BATT_TIME_UNITS}"
+  fi
+}
+
+initAPM() {
+  # discard fist read
+  read < $APM_FILE
+  # get APM values
+  read \
+    KERNEL_DRIVER_VERSION \
+    BIOS_VERSION \
+    X \
+    BATT_STATUS \
+    Y \
+    Z \
+    BATT_PERCENTAGE \
+    BATT_TIME \
+    BATT_TIME_UNITS \
+    < $APM_FILE
+  # transform raw status to string
+  case $BATT_STATUS in
+    0x00)
+      BATT_STATUS="discharging"
+      ;;
+    0x01)
+      case $BATT_PERCENTAGE in
+	100%) BATT_STATUS="charged" ;;
+        *) BATT_STATUS="charging" ;;
+      esac
+      ;;
+  esac
+}
+
+initACPI() {
+  # discard first read
+  cat $ACPI_DIR/state >/dev/null
+  # get ACPI values
+  BATT_STATUS="$(grep -e 'charging state:' $ACPI_DIR/state | awk '{print $3}')"
+  BATT_CAPACITY="$(grep -e 'remaining capacity:' $ACPI_DIR/state | awk '{print $3}')"
+  BATT_CAPACITY_FULL="$(grep -e 'design capacity:' $ACPI_DIR/info | awk '{print $3}')"
+  BATT_CAPACITY_WARNING="$(grep -e 'design capacity warning:' $ACPI_DIR/info | awk '{print $4}')"
+  BATT_CAPACITY_LOW="$(grep -e 'design capacity low:' $ACPI_DIR/info | awk '{print $4}')"
+  let BATT_PERCENTAGE="($BATT_CAPACITY*100)/$BATT_CAPACITY_FULL"
+  BATT_PERCENTAGE="${BATT_PERCENTAGE}%"
+  BATT_VOLTAGE="$(grep -e 'present voltage:' $ACPI_DIR/state | awk '{print $3}')"
+  BATT_VOLTAGE_FULL="$(grep -e 'design voltage:' $ACPI_DIR/info | awk '{print $3}')"
+}
+
+init() {
+  if [ -f /proc/apm ]; then
+    APM_FILE="/proc/apm"
+    PM_MODE="apm"
+    initAPM
+  elif [ -d /proc/acpi/battery ]; then
+    ACPI_DIR="$(find /proc/acpi/battery -type f -name info -exec grep -H 'present: .* yes' {} \; | sed 's/info:.*$//')"
+    if [ -d "$ACPI_DIR" ]; then
+      PM_MODE="acpi"
+      initACPI
+    fi
+  fi
+  [ -z "$PM_MODE" ] && msgError "can't find APM/ACPI files"
+}
+
+main() {
+#echo "PM_MODE=$PM_MODE; APM_FILE=$APM_FILE; ACPI_DIR=$ACPI_DIR"
+#exit 0
+  if [ $# -eq 0 ]; then
+    getStatus
+  elif [ "$1" = "-v" ]; then
+    VERBOSE=1
+    getStatus
+  else
+    while [ "$1" ]; do
+      case $1 in
+        -k) getKernelDriverVersion ;;
+        -b) getBiosVersion ;;
+        -s) getBattStatus ;;
+        -c) getBattCapacity ;;
+        -cf) getBattCapacityFull ;;
+        -cw) getBattCapacityWarning ;;
+        -cl) getBattCapacityLow ;;
+        -mv) getBattVoltage ;;
+        -mf) getBattVoltageFull ;;
+        -p) getBattPercentage ;;
+        -t) getBattTime ;;
+        -u) getBattTimeUnits ;;
+        -C) shift; getCustomFormat "$@"; break ;;
+        -e) echo ;;
+        -h) msgUsage ;;
+      esac
+      shift
+    done
+  fi
+}
+
+VERBOSE=0
+
+PM_MODE=""      # apm or apci
+APM_FILE=""     # /proc/apm
+ACPI_DIR=""     # /proc/acpi/battery/<id>/
+
+KERNEL_DRIVER_VERSION=""
+BIOS_VERSION=""
+BATT_STATUS=""
+BATT_CAPACITY=""
+BATT_CAPACITY_FULL=""
+BATT_CAPACITY_WARNING=""
+BATT_CACACITY_LOW=""
+BATT_VOLTAGE=""
+BATT_VOLTAGE_FULL=""
+BATT_PERCENTAGE=""
+BATT_TIME=""
+BATT_TIME_UNITS=""
+
+init
+main $@
+
+exit 0
+
+# End of file
