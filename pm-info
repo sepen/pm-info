@@ -21,7 +21,7 @@ Where options are:
   -cf          Print battery capacity full
   -cw          Print battery capacity warning
   -cl          Print battery capacity low
-  -mv          Print baterry voltage
+  -mv          Print battery voltage
   -mf          Print battery voltage full
   -p           Print battery charge percentage
   -t           Print battery charge time
@@ -91,10 +91,10 @@ getCustomFormat() {
     -e "s|%k|$KERNEL_DRIVER_VERSION|g" \
     -e "s|%b|$BIOS_VERSION|g" \
     -e "s|%s|$BATT_STATUS|g" \
-    -e "s|%c|$BATT_CAPACITY|g" \
     -e "s|%cf|$BATT_CAPACITY_FULL|g" \
     -e "s|%cw|$BATT_CAPACITY_WARNING|g" \
     -e "s|%cl|$BATT_CACACITY_LOW|g" \
+    -e "s|%c|$BATT_CAPACITY|g" \
     -e "s|%mv|$BATT_VOLTAGE|g" \
     -e "s|%mf|$BATT_VOLTAGE_FULL|g" \
     -e "s|%p|$BATT_PERCENTAGE|g" \
@@ -104,18 +104,18 @@ getCustomFormat() {
 
 getStatus() {
   if [ $VERBOSE -eq 1 ]; then
-    [ "$PM_MODE" == "apm" ] && echo "Driver version: $KERNEL_DRIVER_VERSION"
-    [ "$PM_MODE" == "apm" ] && echo "Bios version: $BIOS_VERSION"
-  fi
-  echo "Battery ${BATT_STATUS}: ${BATT_PERCENTAGE}"
-  if [ $VERBOSE -eq 1 ]; then
-    [ "$PM_MODE" == "acpi" ] && echo "Battery capacity: ${BATT_CAPACITY}mAh"
-    [ "$PM_MODE" == "acpi" ] && echo "Battery full: ${BATT_CAPACITY_FULL}mAh"
-    [ "$PM_MODE" == "acpi" ] && echo "Battery warning: ${BATT_CAPACITY_WARNING}mAh"
-    [ "$PM_MODE" == "acpi" ] && echo "Battery low: ${BATT_CAPACITY_LOW}mAh"
-    [ "$PM_MODE" == "acpi" ] && echo "Battery voltage: ${BATT_VOLTAGE}mV"
-    [ "$PM_MODE" == "acpi" ] && echo "Battery voltage full: ${BATT_VOLTAGE_FULL}mV"
-    [ "$PM_MODE" == "apm" ] && echo "Battery remaining: ${BATT_TIME}${BATT_TIME_UNITS}"
+    [ "$PM_MODE" == "apm" ] && printf "Driver version:\t\t%5s\n" $KERNEL_DRIVER_VERSION
+    [ "$PM_MODE" == "apm" ] && printf "Bios version:\t\t%5s\n" $BIOS_VERSION
+    printf "Battery %s:\t%5s\n" $BATT_STATUS $BATT_PERCENTAGE
+    [ "$PM_MODE" == "acpi" ] && printf "Battery capacity:\t%5s mAh\n" $BATT_CAPACITY
+    [ "$PM_MODE" == "acpi" ] && printf "Battery full:\t\t%5s mAh\n" $BATT_CAPACITY_FULL
+    [ "$PM_MODE" == "acpi" ] && printf "Battery warning:\t%5s mAh\n" $BATT_CAPACITY_WARNING
+    [ "$PM_MODE" == "acpi" ] && printf "Battery low:\t\t%5s mAh\n" $BATT_CAPACITY_LOW
+    [ "$PM_MODE" == "acpi" ] && printf "Battery voltage:\t%5s mV\n" $BATT_VOLTAGE
+    [ "$PM_MODE" == "acpi" ] && printf "Battery voltage full:\t%5s mV\n" $BATT_VOLTAGE_FULL
+    [ "$PM_MODE" == "apm" ] && printf "Battery remaining:\t%5s %s\n" $BATT_TIME $BATT_TIME_UNITS
+  else
+    echo "$BATT_STATUS: $BATT_PERCENTAGE"
   fi
 }
 
@@ -136,15 +136,8 @@ initAPM() {
     < $APM_FILE
   # transform raw status to string
   case $BATT_STATUS in
-    0x00)
-      BATT_STATUS="discharging"
-      ;;
-    0x01)
-      case $BATT_PERCENTAGE in
-	100%) BATT_STATUS="charged" ;;
-        *) BATT_STATUS="charging" ;;
-      esac
-      ;;
+      0x00) BATT_STATUS="discharging" ;;
+      0x01) BATT_STATUS="charging" ;;
   esac
 }
 
