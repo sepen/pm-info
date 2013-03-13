@@ -8,11 +8,13 @@
 pm-info \- battery info from APM/ACPI files 
 
 .SH "DESCRIPTION"
-pm-info automatically selects the method to accessing battery stuff and
-gives you status information.
+pm-info is a tool that shows the status of our laptop battery.
+It supports both APM and ACPI methods, and allows several options to
+customize the output result shown, which makes it perfect for use from
+other scripts.
 
 .SH "USAGE"
-pm-info [options]
+pm-info [option(s)]
 
 Where options are:
   -v           Print verbose info
@@ -31,6 +33,7 @@ Where options are:
   -e           Print end of line
   -C "STRING"  Print output in custom format
   -h           Print this help information
+  -V           Print version information
 
 .SH "EXAMPLES"
 Examples which worked with APM/ACPI:

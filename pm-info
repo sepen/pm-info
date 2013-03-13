@@ -10,8 +10,7 @@ msgError() {
 
 msgUsage() {
   cat << __EOF__
-pm-info 0.1 by Jose V Beneyto <sepen@crux.nu>
-Usage: pm-info [options]
+Usage: pm-info [option(s)]
 Where options are:
   -v           Print verbose info
   -k           Print kernel driver version
@@ -29,12 +28,14 @@ Where options are:
   -e           Print end of line
   -C "STRING"  Print output in custom format
   -h           Print this help information
-Examples of STRING:
-  apm/apci:    "Batt: %s (%p)"
-  apm:         "Battery Status: %p (%t%u), AC: %s"
-  apm:         "BIOS Version %b (Kernel Driver Version %k): %p"
-  acpi:        "Batt: %s %p - Capacity: %c/%cf mAh - Voltage: %mv/%mf mV"
+  -V           Print version information
+See pm-info(1) manual page for more information and options.
 __EOF__
+  exit 0
+}
+
+msgVersion() {
+  echo "pm-info 0.2 by Jose V Beneyto <sepen@crux.nu>"
   exit 0
 }
 
@@ -106,7 +107,7 @@ getStatus() {
   if [ $VERBOSE -eq 1 ]; then
     [ "$PM_MODE" == "apm" ] && printf "Driver version:\t\t%5s\n" $KERNEL_DRIVER_VERSION
     [ "$PM_MODE" == "apm" ] && printf "Bios version:\t\t%5s\n" $BIOS_VERSION
-    printf "Battery %s:\t%5s\n" $BATT_STATUS $BATT_PERCENTAGE
+    printf "Battery %-16s %5s\n" $BATT_STATUS: $BATT_PERCENTAGE
     [ "$PM_MODE" == "acpi" ] && printf "Battery capacity:\t%5s mAh\n" $BATT_CAPACITY
     [ "$PM_MODE" == "acpi" ] && printf "Battery full:\t\t%5s mAh\n" $BATT_CAPACITY_FULL
     [ "$PM_MODE" == "acpi" ] && printf "Battery warning:\t%5s mAh\n" $BATT_CAPACITY_WARNING
@@ -142,18 +143,27 @@ initAPM() {
 }
 
 initACPI() {
-  # discard first read
-  cat $ACPI_DIR/state >/dev/null
-  # get ACPI values
-  BATT_STATUS="$(grep -e 'charging state:' $ACPI_DIR/state | awk '{print $3}')"
-  BATT_CAPACITY="$(grep -e 'remaining capacity:' $ACPI_DIR/state | awk '{print $3}')"
-  BATT_CAPACITY_FULL="$(grep -e 'design capacity:' $ACPI_DIR/info | awk '{print $3}')"
-  BATT_CAPACITY_WARNING="$(grep -e 'design capacity warning:' $ACPI_DIR/info | awk '{print $4}')"
-  BATT_CAPACITY_LOW="$(grep -e 'design capacity low:' $ACPI_DIR/info | awk '{print $4}')"
-  let BATT_PERCENTAGE="($BATT_CAPACITY*100)/$BATT_CAPACITY_FULL"
-  BATT_PERCENTAGE="${BATT_PERCENTAGE}%"
-  BATT_VOLTAGE="$(grep -e 'present voltage:' $ACPI_DIR/state | awk '{print $3}')"
-  BATT_VOLTAGE_FULL="$(grep -e 'design voltage:' $ACPI_DIR/info | awk '{print $3}')"
+  # check if battery is present
+  if grep -q 'present: .* no' $ACPI_DIR/info; then
+    BATT_STATUS="not-present"
+    BATT_CAPACITY="0"; BATT_CAPACITY_FULL="$BATT_CAPACITY"
+    BATT_CAPACITY_WARNING="$BATT_CAPACITY"; BATT_CAPACITY_LOW="$BATT_CAPACITY"
+    BATT_PERCENTAGE="0%"
+    BATT_VOLTAGE="0"; BATT_VOLTAGE_FULL="$BATT_VOLTAGE"
+  else
+    # discard first read
+    cat $ACPI_DIR/state >/dev/null
+    # get ACPI values
+    BATT_STATUS="$(grep -e 'charging state:' $ACPI_DIR/state | awk '{print $3}')"
+    BATT_CAPACITY="$(grep -e 'remaining capacity:' $ACPI_DIR/state | awk '{print $3}')"
+    BATT_CAPACITY_FULL="$(grep -e 'design capacity:' $ACPI_DIR/info | awk '{print $3}')"
+    BATT_CAPACITY_WARNING="$(grep -e 'design capacity warning:' $ACPI_DIR/info | awk '{print $4}')"
+    BATT_CAPACITY_LOW="$(grep -e 'design capacity low:' $ACPI_DIR/info | awk '{print $4}')"
+    let BATT_PERCENTAGE="($BATT_CAPACITY*100)/$BATT_CAPACITY_FULL"
+    BATT_PERCENTAGE="${BATT_PERCENTAGE}%"
+    BATT_VOLTAGE="$(grep -e 'present voltage:' $ACPI_DIR/state | awk '{print $3}')"
+    BATT_VOLTAGE_FULL="$(grep -e 'design voltage:' $ACPI_DIR/info | awk '{print $3}')"
+  fi
 }
 
 init() {
@@ -162,7 +172,7 @@ init() {
     PM_MODE="apm"
     initAPM
   elif [ -d /proc/acpi/battery ]; then
-    ACPI_DIR="$(find /proc/acpi/battery -type f -name info -exec grep -H 'present: .* yes' {} \; | sed 's/info:.*$//')"
+    ACPI_DIR="$(find /proc/acpi/battery -type f -name info -exec dirname {} \;)"
     if [ -d "$ACPI_DIR" ]; then
       PM_MODE="acpi"
       initACPI
@@ -172,8 +182,10 @@ init() {
 }
 
 main() {
-#echo "PM_MODE=$PM_MODE; APM_FILE=$APM_FILE; ACPI_DIR=$ACPI_DIR"
-#exit 0
+  if [ $DEBUG -eq 1 ]; then
+    echo "PM_MODE=$PM_MODE; APM_FILE=$APM_FILE; ACPI_DIR=$ACPI_DIR"
+    #exit 0
+  fi
   if [ $# -eq 0 ]; then
     getStatus
   elif [ "$1" = "-v" ]; then
@@ -197,11 +209,14 @@ main() {
         -C) shift; getCustomFormat "$@"; break ;;
         -e) echo ;;
         -h) msgUsage ;;
+	-V) msgVersion ;;
       esac
       shift
     done
   fi
 }
+
+readonly DEBUG=0
 
 VERBOSE=0
 
