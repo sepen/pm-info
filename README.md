@@ -1,18 +1,14 @@
+# pm-info
 
+Battery info from APM/ACPI files
 
-            pm-info: battery info from APM/ACPI files
-
-
-DESCRIPTION
-
-pm-info  is  a tool that shows the status of our laptop battery.
+**pm-info** is a tool that shows the status of our laptop battery. \
 It supports both APM and ACPI methods, and allows several options to
 customize the output result shown, which makes it perfect for use from
 other scripts.
 
-
-USAGE
-
+## Usage
+```
 $ pm-info [option(s)]
 
 Where options are:
@@ -33,31 +29,28 @@ Where options are:
    -C "STRING"  Print output in custom format
    -h           Print this help information
    -V           Print version information
+```
 
-
-EXAMPLES
+## Examples
 
 Examples which worked with APM/ACPI:
+```
 $ pm-info
 $ pm-info -C "Batt: %s (%p)"
 $ pm-info -v
+```
 
 Examples which only worked with APM:
+```
 $ pm-info -b
 $ pm-info -t
 $ pm-info -C "Battery Status: %p (%t%u), AC: %s"
 $ pm-info -C "BIOS Version %b (Kernel Driver Version %k): %p"
+```
 
 Examples which only worked with ACPI:
+```
 $ pm-info -mv
 $ pm-info -cw
 $ pm-info -C "Batt: %s %p - Capacity: %c/%cf mAh - Voltage: %mv/%mf mV"
-
-
-AUTHORS
-
-Jose V Beneyto <sepen@crux.nu>
-
-
-
-                                                                                                                     pm-info(1)
+```
