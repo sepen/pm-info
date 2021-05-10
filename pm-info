@@ -112,7 +112,7 @@ getStatus() {
     [ "$PM_MODE" == "acpi" ] && printf "Battery full:\t\t%5s mAh\n" $BATT_CAPACITY_FULL
     [ "$PM_MODE" == "acpi" ] && printf "Battery warning:\t%5s mAh\n" $BATT_CAPACITY_WARNING
     [ "$PM_MODE" == "acpi" ] && printf "Battery low:\t\t%5s mAh\n" $BATT_CAPACITY_LOW
-    [ "$PM_MODE" == "acpi" ] && printf "Battery voltage:\t%5s mV\n" $BATT_VOLTAGE
+    [ "$PM_MODE" == "acpi" ] || [ "$PM_MODE" == "uevent" ] && printf "Battery voltage:\t%5s mV\n" $BATT_VOLTAGE
     [ "$PM_MODE" == "acpi" ] && printf "Battery voltage full:\t%5s mV\n" $BATT_VOLTAGE_FULL
     [ "$PM_MODE" == "apm" ] && printf "Battery remaining:\t%5s %s\n" $BATT_TIME $BATT_TIME_UNITS
   else
@@ -137,8 +137,8 @@ initAPM() {
     < $APM_FILE
   # transform raw status to string
   case $BATT_STATUS in
-      0x00) BATT_STATUS="discharging" ;;
-      0x01) BATT_STATUS="charging" ;;
+      0x00) BATT_STATUS="Discharging" ;;
+      0x01) BATT_STATUS="Charging" ;;
   esac
 }
 
@@ -166,25 +166,42 @@ initACPI() {
   fi
 }
 
+initUevent() {
+  # get Uevent values
+  BATT_STATUS="$(grep '^POWER_SUPPLY_STATUS=' $UEVENT_DIR/uevent | sed 's/POWER_SUPPLY_STATUS=//' | tr '[A-Z]' '[a-z]')"
+  BATT_PERCENTAGE="$(grep '^POWER_SUPPLY_CAPACITY=' $UEVENT_DIR/uevent | sed 's/POWER_SUPPLY_CAPACITY=//')%"
+  BATT_VOLTAGE="$(grep '^POWER_SUPPLY_VOLTAGE_NOW=' $UEVENT_DIR/uevent | sed 's/POWER_SUPPLY_VOLTAGE_NOW=//')"
+}
+
 init() {
   if [ -f /proc/apm ]; then
     APM_FILE="/proc/apm"
     PM_MODE="apm"
     initAPM
   elif [ -d /proc/acpi/battery ]; then
-    ACPI_DIR="$(find /proc/acpi/battery -type f -name info -exec dirname {} \;)"
+    ACPI_DIR=$(find /proc/acpi/battery -type f -name info -exec dirname {} \;)
     if [ -d "$ACPI_DIR" ]; then
       PM_MODE="acpi"
       initACPI
     fi
+  elif [ -d /sys/class/power_supply ]; then
+    UEVENT_DIR=$(readlink -f /sys/class/power_supply/BAT*)
+    if [ -f "$UEVENT_DIR/uevent" ]; then
+      PM_MODE="uevent"
+      initUevent
+    fi
   fi
-  [ -z "$PM_MODE" ] && msgError "can't find APM/ACPI files"
+  [ -z "$PM_MODE" ] && msgError "can't find APM/ACPI/Uevent files"
 }
 
 main() {
   if [ $DEBUG -eq 1 ]; then
-    echo "PM_MODE=$PM_MODE; APM_FILE=$APM_FILE; ACPI_DIR=$ACPI_DIR"
-    #exit 0
+    echo "PM_MODE=$PM_MODE"
+    case $PM_MODE in
+      apm) echo "APM_FILE = $APM_FILE" ;;
+      acpi) echo "ACPI_DIR = $ACPI_DIR" ;;
+      uevent) echo "UEVENT_DIR = $UEVENT_DIR" ;;
+    esac
   fi
   if [ $# -eq 0 ]; then
     getStatus
@@ -209,7 +226,7 @@ main() {
         -C) shift; getCustomFormat "$@"; break ;;
         -e) echo ;;
         -h) msgUsage ;;
-	-V) msgVersion ;;
+        -V) msgVersion ;;
       esac
       shift
     done
@@ -220,9 +237,10 @@ readonly DEBUG=0
 
 VERBOSE=0
 
-PM_MODE=""      # apm or apci
+PM_MODE=""      # apm or apci or uevent
 APM_FILE=""     # /proc/apm
-ACPI_DIR=""     # /proc/acpi/battery/<id>/
+ACPI_DIR=""     # /proc/acpi/battery/<id>
+UEVENT_DIR=""   # /sys/class/power_supply/<id>
 
 KERNEL_DRIVER_VERSION=""
 BIOS_VERSION=""
